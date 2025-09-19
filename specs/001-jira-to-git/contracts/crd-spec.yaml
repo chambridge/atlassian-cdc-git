@@ -1,0 +1,324 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: jiracdc.jiracdc.io
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.12.0
+spec:
+  group: jiracdc.io
+  names:
+    kind: JiraCDC
+    listKind: JiraCDCList
+    plural: jiracdc
+    singular: jiracdc
+  scope: Namespaced
+  versions:
+  - name: v1
+    served: true
+    storage: true
+    additionalPrinterColumns:
+    - name: Phase
+      type: string
+      description: Current sync phase
+      jsonPath: .status.phase
+    - name: Synced Issues
+      type: integer
+      description: Number of synced issues
+      jsonPath: .status.syncedIssueCount
+    - name: Last Sync
+      type: date
+      description: Last successful sync time
+      jsonPath: .status.lastSyncTime
+    - name: Age
+      type: date
+      jsonPath: .metadata.creationTimestamp
+    schema:
+      openAPIV3Schema:
+        description: JiraCDC represents a JIRA to Git CDC configuration
+        type: object
+        properties:
+          apiVersion:
+            type: string
+          kind:
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: JiraCDCSpec defines the desired state of JiraCDC
+            type: object
+            required:
+            - jiraInstance
+            - syncTarget
+            - gitRepository
+            properties:
+              jiraInstance:
+                description: JIRA instance configuration
+                type: object
+                required:
+                - baseURL
+                - credentialsSecret
+                properties:
+                  baseURL:
+                    description: JIRA instance base URL
+                    type: string
+                    format: uri
+                    example: "https://company.atlassian.net"
+                  credentialsSecret:
+                    description: Name of Kubernetes secret containing JIRA credentials
+                    type: string
+                    example: "jira-credentials"
+                  proxyConfig:
+                    description: HTTP proxy configuration for staging environments
+                    type: object
+                    properties:
+                      enabled:
+                        type: boolean
+                      url:
+                        type: string
+                        format: uri
+                      credentialsSecret:
+                        type: string
+              syncTarget:
+                description: Defines what JIRA content to synchronize
+                type: object
+                required:
+                - type
+                properties:
+                  type:
+                    description: Type of sync target
+                    type: string
+                    enum: ["project", "issues", "jql"]
+                  projectKey:
+                    description: JIRA project key (required for type=project)
+                    type: string
+                    example: "PROJ"
+                  issueKeys:
+                    description: Specific issue keys (required for type=issues)
+                    type: array
+                    items:
+                      type: string
+                    example: ["PROJ-123", "PROJ-456"]
+                  jqlQuery:
+                    description: JQL query (required for type=jql)
+                    type: string
+                    example: "project = PROJ AND status != Done"
+              gitRepository:
+                description: Target git repository configuration
+                type: object
+                required:
+                - url
+                - credentialsSecret
+                properties:
+                  url:
+                    description: Git repository URL
+                    type: string
+                    format: uri
+                    example: "git@github.com:company/jira-mirror.git"
+                  credentialsSecret:
+                    description: Name of Kubernetes secret containing git credentials
+                    type: string
+                    example: "git-credentials"
+                  branch:
+                    description: Target branch name
+                    type: string
+                    default: "main"
+              operands:
+                description: Configuration for managed operands
+                type: object
+                properties:
+                  api:
+                    description: API operand configuration
+                    type: object
+                    properties:
+                      enabled:
+                        type: boolean
+                        default: true
+                      replicas:
+                        type: integer
+                        minimum: 1
+                        maximum: 10
+                        default: 1
+                      image:
+                        type: string
+                        default: "jiracdc/api:latest"
+                      resources:
+                        type: object
+                        properties:
+                          requests:
+                            type: object
+                            properties:
+                              cpu:
+                                type: string
+                                default: "100m"
+                              memory:
+                                type: string
+                                default: "128Mi"
+                          limits:
+                            type: object
+                            properties:
+                              cpu:
+                                type: string
+                                default: "500m"
+                              memory:
+                                type: string
+                                default: "512Mi"
+                  ui:
+                    description: UI operand configuration
+                    type: object
+                    properties:
+                      enabled:
+                        type: boolean
+                        default: true
+                      replicas:
+                        type: integer
+                        minimum: 1
+                        maximum: 5
+                        default: 1
+                      image:
+                        type: string
+                        default: "jiracdc/ui:latest"
+                      resources:
+                        type: object
+                        properties:
+                          requests:
+                            type: object
+                            properties:
+                              cpu:
+                                type: string
+                                default: "50m"
+                              memory:
+                                type: string
+                                default: "64Mi"
+                          limits:
+                            type: object
+                            properties:
+                              cpu:
+                                type: string
+                                default: "200m"
+                              memory:
+                                type: string
+                                default: "256Mi"
+              syncConfig:
+                description: Synchronization behavior configuration
+                type: object
+                properties:
+                  interval:
+                    description: Polling interval for sync operations
+                    type: string
+                    default: "5m"
+                    pattern: "^[0-9]+(s|m|h)$"
+                  bootstrap:
+                    description: Whether to perform initial bootstrap
+                    type: boolean
+                    default: true
+                  activeIssuesOnly:
+                    description: Sync only non-closed issues
+                    type: boolean
+                    default: true
+                  retryPolicy:
+                    description: Retry policy for failed operations
+                    type: object
+                    properties:
+                      maxRetries:
+                        type: integer
+                        minimum: 0
+                        maximum: 10
+                        default: 3
+                      backoffMultiplier:
+                        type: number
+                        minimum: 1.0
+                        maximum: 5.0
+                        default: 2.0
+          status:
+            description: JiraCDCStatus defines the observed state of JiraCDC
+            type: object
+            properties:
+              phase:
+                description: Current phase of the JiraCDC
+                type: string
+                enum: ["Pending", "Syncing", "Current", "Error", "Paused"]
+              lastSyncTime:
+                description: Last successful sync timestamp
+                type: string
+                format: date-time
+              syncedIssueCount:
+                description: Number of issues currently synced
+                type: integer
+                minimum: 0
+              operandStatus:
+                description: Status of managed operands
+                type: object
+                properties:
+                  api:
+                    description: API operand status
+                    type: object
+                    properties:
+                      ready:
+                        type: boolean
+                      replicas:
+                        type: integer
+                      readyReplicas:
+                        type: integer
+                      endpoint:
+                        type: string
+                  ui:
+                    description: UI operand status
+                    type: object
+                    properties:
+                      ready:
+                        type: boolean
+                      replicas:
+                        type: integer
+                      readyReplicas:
+                        type: integer
+                      endpoint:
+                        type: string
+                  jobs:
+                    description: Current job status
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                        type:
+                          type: string
+                          enum: ["bootstrap", "reconciliation", "maintenance"]
+                        status:
+                          type: string
+                          enum: ["pending", "running", "completed", "failed"]
+                        progress:
+                          type: object
+                          properties:
+                            totalItems:
+                              type: integer
+                            processedItems:
+                              type: integer
+                            percentComplete:
+                              type: number
+                              minimum: 0
+                              maximum: 100
+              conditions:
+                description: Detailed status conditions
+                type: array
+                items:
+                  type: object
+                  required:
+                  - type
+                  - status
+                  properties:
+                    type:
+                      type: string
+                      enum: ["Ready", "Syncing", "Error", "OperandsReady"]
+                    status:
+                      type: string
+                      enum: ["True", "False", "Unknown"]
+                    lastTransitionTime:
+                      type: string
+                      format: date-time
+                    reason:
+                      type: string
+                    message:
+                      type: string
+    subresources:
+      status: {}

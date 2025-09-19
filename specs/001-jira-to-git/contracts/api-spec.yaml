@@ -1,0 +1,620 @@
+openapi: 3.0.3
+info:
+  title: JIRA CDC Operator API
+  description: REST API for JIRA Change Data Capture Kubernetes Operator managed API operand
+  version: 1.0.0
+  contact:
+    name: JIRA CDC Operator
+    url: https://github.com/company/jira-cdc-operator
+
+servers:
+  - url: http://localhost:8080/api/v1
+    description: Local development API operand
+  - url: https://jiracdc-api.{namespace}.svc.cluster.local:8080/api/v1
+    description: Kubernetes cluster API operand
+
+paths:
+  /projects:
+    get:
+      summary: List synchronized JIRA projects
+      description: Returns list of JIRA projects currently being synchronized by this operator instance
+      operationId: listProjects
+      responses:
+        '200':
+          description: List of synchronized projects
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ProjectSummary'
+
+  /projects/{projectKey}:
+    get:
+      summary: Get project details
+      description: Returns detailed information about a specific synchronized JIRA project
+      operationId: getProject
+      parameters:
+        - name: projectKey
+          in: path
+          required: true
+          description: JIRA project key
+          schema:
+            type: string
+            example: "PROJ"
+      responses:
+        '200':
+          description: Project details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectDetails'
+        '404':
+          description: Project not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /projects/{projectKey}/sync:
+    post:
+      summary: Trigger manual synchronization
+      description: Triggers a manual synchronization operation for the specified project
+      operationId: triggerSync
+      parameters:
+        - name: projectKey
+          in: path
+          required: true
+          description: JIRA project key
+          schema:
+            type: string
+            example: "PROJ"
+      requestBody:
+        description: Sync operation parameters
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SyncRequest'
+      responses:
+        '202':
+          description: Sync operation started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskResponse'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Project not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /tasks:
+    get:
+      summary: List CDC tasks
+      description: Returns list of bootstrap, reconciliation, and maintenance tasks
+      operationId: listTasks
+      parameters:
+        - name: status
+          in: query
+          description: Filter tasks by status
+          schema:
+            type: string
+            enum: [pending, running, completed, failed, cancelled]
+        - name: type
+          in: query
+          description: Filter tasks by type
+          schema:
+            type: string
+            enum: [bootstrap, reconciliation, maintenance]
+        - name: projectKey
+          in: query
+          description: Filter tasks by project key
+          schema:
+            type: string
+            example: "PROJ"
+      responses:
+        '200':
+          description: List of tasks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TaskSummary'
+
+  /tasks/{taskId}:
+    get:
+      summary: Get task details
+      description: Returns detailed information about a specific CDC task
+      operationId: getTask
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          description: Task identifier
+          schema:
+            type: string
+            example: "task-123e4567-e89b-12d3-a456-426614174000"
+      responses:
+        '200':
+          description: Task details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskDetails'
+        '404':
+          description: Task not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /tasks/{taskId}/cancel:
+    post:
+      summary: Cancel task
+      description: Cancels a pending or running task
+      operationId: cancelTask
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          description: Task identifier
+          schema:
+            type: string
+            example: "task-123e4567-e89b-12d3-a456-426614174000"
+      responses:
+        '200':
+          description: Task cancelled successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskResponse'
+        '400':
+          description: Task cannot be cancelled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Task not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /issues/{issueKey}:
+    get:
+      summary: Get issue sync status
+      description: Returns synchronization status and metadata for a specific JIRA issue
+      operationId: getIssueStatus
+      parameters:
+        - name: issueKey
+          in: path
+          required: true
+          description: JIRA issue key
+          schema:
+            type: string
+            example: "PROJ-123"
+      responses:
+        '200':
+          description: Issue sync status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IssueSyncStatus'
+        '404':
+          description: Issue not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /health:
+    get:
+      summary: Health check endpoint
+      description: Returns health status of the API operand
+      operationId: getHealth
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthStatus'
+        '503':
+          description: Service is unhealthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /metrics:
+    get:
+      summary: Prometheus metrics endpoint
+      description: Returns Prometheus-compatible metrics for monitoring
+      operationId: getMetrics
+      responses:
+        '200':
+          description: Metrics data
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: |
+                  # HELP jiracdc_sync_operations_total Total number of sync operations
+                  # TYPE jiracdc_sync_operations_total counter
+                  jiracdc_sync_operations_total{status="success"} 42
+
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      required:
+        - status
+        - timestamp
+        - version
+      properties:
+        status:
+          type: string
+          enum: [healthy, degraded, unhealthy]
+          example: "healthy"
+        timestamp:
+          type: string
+          format: date-time
+          example: "2025-09-19T14:30:00Z"
+        version:
+          type: string
+          example: "1.0.0"
+        uptime:
+          type: string
+          example: "24h30m15s"
+        components:
+          type: object
+          properties:
+            jiraConnection:
+              type: string
+              enum: [healthy, unhealthy]
+            gitRepository:
+              type: string
+              enum: [healthy, unhealthy]
+            kubernetes:
+              type: string
+              enum: [healthy, unhealthy]
+
+    ProjectSummary:
+      type: object
+      required:
+        - projectKey
+        - name
+        - status
+        - lastSyncTime
+        - syncedIssueCount
+      properties:
+        projectKey:
+          type: string
+          example: "PROJ"
+        name:
+          type: string
+          example: "Sample Project"
+        status:
+          type: string
+          enum: [Pending, Syncing, Current, Error, Paused]
+          example: "Current"
+        lastSyncTime:
+          type: string
+          format: date-time
+          example: "2025-09-19T14:25:00Z"
+        syncedIssueCount:
+          type: integer
+          minimum: 0
+          example: 156
+        gitRepository:
+          type: string
+          format: uri
+          example: "git@github.com:company/jira-mirror.git"
+
+    ProjectDetails:
+      allOf:
+        - $ref: '#/components/schemas/ProjectSummary'
+        - type: object
+          properties:
+            jiraInstance:
+              type: object
+              properties:
+                baseURL:
+                  type: string
+                  format: uri
+                  example: "https://company.atlassian.net"
+                proxyEnabled:
+                  type: boolean
+                  example: false
+            syncConfig:
+              type: object
+              properties:
+                interval:
+                  type: string
+                  example: "5m"
+                activeIssuesOnly:
+                  type: boolean
+                  example: true
+                bootstrap:
+                  type: boolean
+                  example: true
+            operandStatus:
+              type: object
+              properties:
+                api:
+                  $ref: '#/components/schemas/OperandStatus'
+                ui:
+                  $ref: '#/components/schemas/OperandStatus'
+            recentTasks:
+              type: array
+              items:
+                $ref: '#/components/schemas/TaskSummary'
+
+    OperandStatus:
+      type: object
+      required:
+        - ready
+        - replicas
+        - readyReplicas
+      properties:
+        ready:
+          type: boolean
+          example: true
+        replicas:
+          type: integer
+          example: 2
+        readyReplicas:
+          type: integer
+          example: 2
+        endpoint:
+          type: string
+          format: uri
+          example: "http://jiracdc-api.default.svc.cluster.local:8080"
+
+    SyncRequest:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [bootstrap, reconciliation, maintenance]
+          example: "reconciliation"
+        forceRefresh:
+          type: boolean
+          default: false
+          example: false
+        issueFilter:
+          type: string
+          description: JQL query to filter issues for sync
+          example: "status != Done AND updated >= -7d"
+
+    TaskSummary:
+      type: object
+      required:
+        - id
+        - type
+        - status
+        - projectKey
+        - createdAt
+      properties:
+        id:
+          type: string
+          example: "task-123e4567-e89b-12d3-a456-426614174000"
+        type:
+          type: string
+          enum: [bootstrap, reconciliation, maintenance]
+          example: "reconciliation"
+        status:
+          type: string
+          enum: [pending, running, completed, failed, cancelled]
+          example: "running"
+        projectKey:
+          type: string
+          example: "PROJ"
+        createdAt:
+          type: string
+          format: date-time
+          example: "2025-09-19T14:15:00Z"
+        startedAt:
+          type: string
+          format: date-time
+          example: "2025-09-19T14:16:00Z"
+        completedAt:
+          type: string
+          format: date-time
+          example: "2025-09-19T14:20:00Z"
+        progress:
+          $ref: '#/components/schemas/TaskProgress'
+
+    TaskDetails:
+      allOf:
+        - $ref: '#/components/schemas/TaskSummary'
+        - type: object
+          properties:
+            configuration:
+              type: object
+              properties:
+                issueFilter:
+                  type: string
+                  example: "project = PROJ AND status != Done"
+                forceRefresh:
+                  type: boolean
+                  example: false
+            errorMessage:
+              type: string
+              example: "Failed to connect to JIRA API"
+            createdBy:
+              type: string
+              example: "jiracdc-operator"
+            operations:
+              type: array
+              items:
+                $ref: '#/components/schemas/SyncOperation'
+
+    TaskProgress:
+      type: object
+      required:
+        - totalItems
+        - processedItems
+        - percentComplete
+      properties:
+        totalItems:
+          type: integer
+          minimum: 0
+          example: 100
+        processedItems:
+          type: integer
+          minimum: 0
+          example: 75
+        percentComplete:
+          type: number
+          minimum: 0
+          maximum: 100
+          example: 75.0
+        estimatedTimeRemaining:
+          type: string
+          example: "2m30s"
+
+    SyncOperation:
+      type: object
+      required:
+        - id
+        - issueKey
+        - operationType
+        - status
+      properties:
+        id:
+          type: string
+          example: "op-456e7890-e12b-34c5-d678-901234567890"
+        issueKey:
+          type: string
+          example: "PROJ-123"
+        operationType:
+          type: string
+          enum: [create, update, delete, move]
+          example: "update"
+        status:
+          type: string
+          enum: [pending, processing, completed, failed, skipped]
+          example: "completed"
+        processedAt:
+          type: string
+          format: date-time
+          example: "2025-09-19T14:18:30Z"
+        gitOperation:
+          type: object
+          properties:
+            action:
+              type: string
+              example: "file updated"
+            filePath:
+              type: string
+              example: "PROJ-123.md"
+            commitMessage:
+              type: string
+              example: "feat(PROJ-123): update issue status to In Progress"
+            commitHash:
+              type: string
+              example: "abc123def456"
+        errorDetails:
+          type: string
+          example: "Git push failed: authentication error"
+        retryCount:
+          type: integer
+          minimum: 0
+          example: 2
+
+    IssueSyncStatus:
+      type: object
+      required:
+        - issueKey
+        - projectKey
+        - status
+        - gitFilePath
+      properties:
+        issueKey:
+          type: string
+          example: "PROJ-123"
+        projectKey:
+          type: string
+          example: "PROJ"
+        status:
+          type: string
+          example: "In Progress"
+        summary:
+          type: string
+          example: "Implement user authentication"
+        gitFilePath:
+          type: string
+          example: "PROJ-123.md"
+        jiraUpdatedAt:
+          type: string
+          format: date-time
+          example: "2025-09-19T14:10:00Z"
+        syncedAt:
+          type: string
+          format: date-time
+          example: "2025-09-19T14:12:00Z"
+        gitCommitHash:
+          type: string
+          example: "abc123def456"
+        syncStatus:
+          type: string
+          enum: [current, needs_sync, error]
+          example: "current"
+
+    TaskResponse:
+      type: object
+      required:
+        - taskId
+        - status
+        - message
+      properties:
+        taskId:
+          type: string
+          example: "task-123e4567-e89b-12d3-a456-426614174000"
+        status:
+          type: string
+          example: "started"
+        message:
+          type: string
+          example: "Reconciliation task started successfully"
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+        - message
+        - timestamp
+      properties:
+        error:
+          type: string
+          example: "NotFound"
+        message:
+          type: string
+          example: "Project INVALID not found"
+        timestamp:
+          type: string
+          format: date-time
+          example: "2025-09-19T14:30:00Z"
+        details:
+          type: object
+          additionalProperties: true
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token for API authentication
+
+security:
+  - bearerAuth: []

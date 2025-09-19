@@ -1,6 +1,6 @@
 # Feature Specification: JIRA Change Data Capture System
 
-**Feature Branch**: `001-create-a-system`  
+**Feature Branch**: `001-jira-to-git`  
 **Created**: 2025-09-19  
 **Status**: Draft  
 **Input**: User description: "Create a system that performs Change Data Capture for JIRA changes into git storage. It should be deployable on kubernetes. It should be possible to monitor the tasks its performing. It should have an API that allows new bootstrap or consistency reconciliation tasks to be started, monitored for status. There should be a light-weight but polished user interface that uses React and Patternfly 6."
