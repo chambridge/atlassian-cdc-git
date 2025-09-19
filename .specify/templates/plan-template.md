@@ -47,7 +47,11 @@
 ## Constitution Check
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-[Gates determined based on constitution file]
+**Specification-First**: Complete specification exists with no [NEEDS CLARIFICATION] markers
+**Test-Driven Implementation**: All tests will be written before implementation
+**Three-Phase Workflow**: Following spec → plan → tasks workflow
+**Quality Gates**: Constitution compliance verified before proceeding
+**Development Context**: Agent files will be updated with new technologies/patterns
 
 ## Project Structure
 
@@ -208,4 +212,4 @@ ios/ or android/
 - [ ] Complexity deviations documented
 
 ---
-*Based on Constitution v2.1.1 - See `/memory/constitution.md`*
+*Based on Constitution v1.0.0 - See `/memory/constitution.md`*
