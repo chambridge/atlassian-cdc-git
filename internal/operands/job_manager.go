@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/company/jira-cdc-operator/internal/common"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -47,6 +48,7 @@ const (
 type JobManager struct {
 	client.Client
 	Scheme *runtime.Scheme
+	resourceReconciler *common.ResourceReconciler
 }
 
 // NewJobManager creates a new job manager
@@ -54,6 +56,7 @@ func NewJobManager(client client.Client, scheme *runtime.Scheme) OperandManager 
 	return &JobManager{
 		Client: client,
 		Scheme: scheme,
+		resourceReconciler: &common.ResourceReconciler{Client: client},
 	}
 }
 
@@ -209,7 +212,7 @@ func (m *JobManager) createJob(ctx context.Context, jiracdc *jiradcdv1.JiraCDC, 
 		},
 	}
 
-	_, err := controllerutil.CreateOrUpdate(ctx, m.Client, job, func() error {
+	_, err := m.resourceReconciler.CreateOrUpdateResource(ctx, job, func() error {
 		// Set labels
 		if job.Labels == nil {
 			job.Labels = make(map[string]string)

@@ -1,5 +1,7 @@
 # Tasks: JIRA Change Data Capture Kubernetes Operator
 
+**Status**: 64 of 67 tasks completed (95.5%)
+
 **Input**: Design documents from `/specs/001-jira-to-git/`
 **Prerequisites**: plan.md (required), research.md, data-model.md, contracts/
 
@@ -118,10 +120,10 @@
 - [x] T058 [P] End-to-end tests for complete workflows in test/e2e/
 - [x] T059 Performance testing for 1000 issue bootstrap (<30 min) in test/performance/
 - [ ] T060 [P] Security scanning and vulnerability assessment
-- [ ] T061 [P] Generate OpenAPI documentation from API handlers
+- [x] T061 [P] Generate OpenAPI documentation from API handlers
 - [x] T062 [P] Update README.md with deployment instructions
 - [x] T063 [P] Create troubleshooting guide in docs/troubleshooting.md
-- [ ] T064 Code duplication analysis and refactoring
+- [x] T064 Code duplication analysis and refactoring
 - [ ] T065 Execute quickstart scenarios for validation
 - [ ] T066 Load testing with concurrent JIRA projects
 - [ ] T067 Chaos engineering tests for resilience validation

@@ -26,6 +26,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/company/jira-cdc-operator/internal/common"
 	"github.com/company/jira-cdc-operator/operands/api/handlers"
 	"github.com/company/jira-cdc-operator/internal/jira"
 	"github.com/company/jira-cdc-operator/internal/git"
@@ -364,13 +365,21 @@ func MetricsRoutes(r *gin.Engine, metricsHandler *handlers.MetricsHandler) {
 
 // ValidateRouterConfig validates router configuration
 func ValidateRouterConfig(config RouterConfig) error {
+	validator := common.NewConfigValidator()
+	
+	// Request timeout validation (allowing 0 for no timeout)
 	if config.RequestTimeout < 0 {
-		return fmt.Errorf("request timeout cannot be negative")
+		validator.AddValidator(func() error {
+			return fmt.Errorf("request timeout cannot be negative")
+		})
 	}
 	
+	// Max request body size validation (allowing 0 for no limit)
 	if config.MaxRequestBodySize < 0 {
-		return fmt.Errorf("max request body size cannot be negative")
+		validator.AddValidator(func() error {
+			return fmt.Errorf("max request body size cannot be negative")
+		})
 	}
 	
-	return nil
+	return validator.Validate()
 }

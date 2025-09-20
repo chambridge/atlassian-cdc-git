@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/company/jira-cdc-operator/internal/common"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -39,6 +40,7 @@ import (
 type APIManager struct {
 	client.Client
 	Scheme *runtime.Scheme
+	resourceReconciler *common.ResourceReconciler
 }
 
 // NewAPIManager creates a new API manager
@@ -46,6 +48,7 @@ func NewAPIManager(client client.Client, scheme *runtime.Scheme) OperandManager 
 	return &APIManager{
 		Client: client,
 		Scheme: scheme,
+		resourceReconciler: &common.ResourceReconciler{Client: client},
 	}
 }
 
@@ -156,7 +159,7 @@ func (m *APIManager) reconcileDeployment(ctx context.Context, jiracdc *jiradcdv1
 		},
 	}
 
-	_, err := controllerutil.CreateOrUpdate(ctx, m.Client, deployment, func() error {
+	_, err := m.resourceReconciler.CreateOrUpdateResource(ctx, deployment, func() error {
 		// Set labels
 		if deployment.Labels == nil {
 			deployment.Labels = make(map[string]string)

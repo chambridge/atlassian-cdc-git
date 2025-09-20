@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/company/jira-cdc-operator/internal/common"
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing/transport"
 	"github.com/go-git/go-git/v5/plumbing/transport/http"
@@ -343,37 +344,27 @@ func ValidateGitAuthConfig(config GitAuthConfig) error {
 		return nil
 		
 	case GitAuthTypeHTTPS:
-		if config.SecretRef == "" {
-			return fmt.Errorf("secretRef is required for HTTPS auth")
-		}
-		if config.UsernameKey == "" {
-			return fmt.Errorf("usernameKey is required for HTTPS auth")
-		}
-		if config.PasswordKey == "" {
-			return fmt.Errorf("passwordKey is required for HTTPS auth")
-		}
+		return common.NewConfigValidator().
+			RequireNonEmpty("secretRef", config.SecretRef).
+			RequireNonEmpty("usernameKey", config.UsernameKey).
+			RequireNonEmpty("passwordKey", config.PasswordKey).
+			Validate()
 		
 	case GitAuthTypeToken:
-		if config.SecretRef == "" {
-			return fmt.Errorf("secretRef is required for token auth")
-		}
-		if config.TokenKey == "" {
-			return fmt.Errorf("tokenKey is required for token auth")
-		}
+		return common.NewConfigValidator().
+			RequireNonEmpty("secretRef", config.SecretRef).
+			RequireNonEmpty("tokenKey", config.TokenKey).
+			Validate()
 		
 	case GitAuthTypeSSH:
-		if config.SecretRef == "" {
-			return fmt.Errorf("secretRef is required for SSH auth")
-		}
-		if config.SSHKeyKey == "" {
-			return fmt.Errorf("sshKeyKey is required for SSH auth")
-		}
+		return common.NewConfigValidator().
+			RequireNonEmpty("secretRef", config.SecretRef).
+			RequireNonEmpty("sshKeyKey", config.SSHKeyKey).
+			Validate()
 		
 	default:
 		return fmt.Errorf("unsupported git authentication type: %s", config.Type)
 	}
-	
-	return nil
 }
 
 // CreateGitAuthProviderFromConfig creates a git auth provider from configuration

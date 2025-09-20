@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/company/jira-cdc-operator/internal/common"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -348,37 +349,31 @@ func DefaultAuthConfig() AuthConfig {
 
 // ValidateAuthConfig validates an authentication configuration
 func ValidateAuthConfig(config AuthConfig) error {
-	if config.SecretRef == "" {
-		return fmt.Errorf("secretRef is required")
-	}
+	validator := common.NewConfigValidator()
 	
+	// Base validation
+	validator.RequireNonEmpty("secretRef", config.SecretRef)
+	
+	// Type-specific validation
 	switch config.Type {
 	case AuthTypeBasic:
-		if config.UsernameKey == "" {
-			return fmt.Errorf("usernameKey is required for basic auth")
-		}
-		if config.PasswordKey == "" {
-			return fmt.Errorf("passwordKey is required for basic auth")
-		}
+		validator.
+			RequireNonEmpty("usernameKey", config.UsernameKey).
+			RequireNonEmpty("passwordKey", config.PasswordKey)
 		
 	case AuthTypeBearer:
-		if config.TokenKey == "" {
-			return fmt.Errorf("tokenKey is required for bearer auth")
-		}
+		validator.RequireNonEmpty("tokenKey", config.TokenKey)
 		
 	case AuthTypeToken:
-		if config.UsernameKey == "" {
-			return fmt.Errorf("usernameKey is required for token auth")
-		}
-		if config.TokenKey == "" {
-			return fmt.Errorf("tokenKey is required for token auth")
-		}
+		validator.
+			RequireNonEmpty("usernameKey", config.UsernameKey).
+			RequireNonEmpty("tokenKey", config.TokenKey)
 		
 	default:
 		return fmt.Errorf("unsupported authentication type: %s", config.Type)
 	}
 	
-	return nil
+	return validator.Validate()
 }
 
 // CreateAuthProviderFromConfig creates an auth provider from configuration

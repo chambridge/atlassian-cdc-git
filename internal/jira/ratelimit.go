@@ -26,6 +26,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/company/jira-cdc-operator/internal/common"
 	"golang.org/x/time/rate"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
@@ -438,36 +439,45 @@ func DefaultRateLimitConfig() RateLimitConfig {
 
 // ValidateRateLimitConfig validates a rate limiting configuration
 func ValidateRateLimitConfig(config RateLimitConfig) error {
-	if config.RequestsPerSecond <= 0 {
-		return fmt.Errorf("requestsPerSecond must be positive")
-	}
+	validator := common.NewConfigValidator()
 	
-	if config.BurstSize <= 0 {
-		return fmt.Errorf("burstSize must be positive")
-	}
+	// Basic rate limit validation
+	validator.
+		RequirePositive("requestsPerSecond", config.RequestsPerSecond).
+		RequirePositive("burstSize", config.BurstSize)
 	
+	// MaxConcurrentRequests can be 0 (unlimited), so just check non-negative
 	if config.MaxConcurrentRequests < 0 {
-		return fmt.Errorf("maxConcurrentRequests must be non-negative")
+		validator.AddValidator(func() error {
+			return fmt.Errorf("maxConcurrentRequests must be non-negative")
+		})
 	}
 	
+	// Exponential backoff validation
 	backoff := config.ExponentialBackoff
+	validator.RequirePositive("multiplier", backoff.Multiplier)
+	
+	// Non-negative validations
 	if backoff.MaxRetries < 0 {
-		return fmt.Errorf("maxRetries must be non-negative")
+		validator.AddValidator(func() error {
+			return fmt.Errorf("maxRetries must be non-negative")
+		})
 	}
 	
 	if backoff.InitialDelay < 0 {
-		return fmt.Errorf("initialDelay must be non-negative")
+		validator.AddValidator(func() error {
+			return fmt.Errorf("initialDelay must be non-negative")
+		})
 	}
 	
+	// Delay relationship validation
 	if backoff.MaxDelay < backoff.InitialDelay {
-		return fmt.Errorf("maxDelay must be >= initialDelay")
+		validator.AddValidator(func() error {
+			return fmt.Errorf("maxDelay must be >= initialDelay")
+		})
 	}
 	
-	if backoff.Multiplier <= 0 {
-		return fmt.Errorf("multiplier must be positive")
-	}
-	
-	return nil
+	return validator.Validate()
 }
 
 // AdaptiveRateLimiter automatically adjusts rate limits based on server responses

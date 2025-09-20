@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/company/jira-cdc-operator/internal/common"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -38,6 +39,7 @@ import (
 type UIManager struct {
 	client.Client
 	Scheme *runtime.Scheme
+	resourceReconciler *common.ResourceReconciler
 }
 
 // NewUIManager creates a new UI manager
@@ -45,6 +47,7 @@ func NewUIManager(client client.Client, scheme *runtime.Scheme) OperandManager {
 	return &UIManager{
 		Client: client,
 		Scheme: scheme,
+		resourceReconciler: &common.ResourceReconciler{Client: client},
 	}
 }
 
@@ -155,7 +158,7 @@ func (m *UIManager) reconcileDeployment(ctx context.Context, jiracdc *jiradcdv1.
 		},
 	}
 
-	_, err := controllerutil.CreateOrUpdate(ctx, m.Client, deployment, func() error {
+	_, err := m.resourceReconciler.CreateOrUpdateResource(ctx, deployment, func() error {
 		// Set labels
 		if deployment.Labels == nil {
 			deployment.Labels = make(map[string]string)
@@ -287,7 +290,7 @@ func (m *UIManager) reconcileService(ctx context.Context, jiracdc *jiradcdv1.Jir
 		},
 	}
 
-	_, err := controllerutil.CreateOrUpdate(ctx, m.Client, service, func() error {
+	_, err := m.resourceReconciler.CreateOrUpdateResource(ctx, service, func() error {
 		// Set labels
 		if service.Labels == nil {
 			service.Labels = make(map[string]string)
@@ -334,7 +337,7 @@ func (m *UIManager) reconcileConfigMap(ctx context.Context, jiracdc *jiradcdv1.J
 		},
 	}
 
-	_, err := controllerutil.CreateOrUpdate(ctx, m.Client, configMap, func() error {
+	_, err := m.resourceReconciler.CreateOrUpdateResource(ctx, configMap, func() error {
 		// Set labels
 		if configMap.Labels == nil {
 			configMap.Labels = make(map[string]string)
