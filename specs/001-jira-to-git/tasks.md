@@ -35,56 +35,56 @@
 - **Tests**: `test/` for integration, individual test files for units
 
 ## Phase 3.1: Setup
-- [ ] T001 Create kubebuilder operator scaffold with domain jiracdc.io and version v1
-- [ ] T002 Initialize Go module with controller-runtime, client-go, go-git dependencies
-- [ ] T003 [P] Configure golangci-lint, gofmt, and pre-commit hooks
-- [ ] T004 [P] Set up Docker multi-stage builds for operator and operands
-- [ ] T005 [P] Create Kubernetes RBAC manifests in config/rbac/
+- [x] T001 Create kubebuilder operator scaffold with domain jiracdc.io and version v1
+- [x] T002 Initialize Go module with controller-runtime, client-go, go-git dependencies
+- [x] T003 [P] Configure golangci-lint, gofmt, and pre-commit hooks
+- [x] T004 [P] Set up Docker multi-stage builds for operator and operands
+- [x] T005 [P] Create Kubernetes RBAC manifests in config/rbac/
 
 ## Phase 3.2: Tests First (TDD) ⚠️ MUST COMPLETE BEFORE 3.3
 **CRITICAL: These tests MUST be written and MUST FAIL before ANY implementation**
-- [ ] T006 [P] CRD validation test for JiraCDC schema in test/crd/jiracdc_validation_test.go
-- [ ] T007 [P] API contract test GET /projects in test/contract/projects_get_test.go
-- [ ] T008 [P] API contract test POST /projects/{key}/sync in test/contract/sync_post_test.go
-- [ ] T009 [P] API contract test GET /tasks in test/contract/tasks_get_test.go
-- [ ] T010 [P] API contract test GET /tasks/{id} in test/contract/tasks_detail_get_test.go
-- [ ] T010a [P] API contract test POST /tasks/{id}/cancel in test/contract/tasks_cancel_post_test.go
-- [ ] T010b [P] API contract test GET /issues/{key} in test/contract/issues_get_test.go
-- [ ] T010c [P] API contract test GET /health in test/contract/health_get_test.go
-- [ ] T010d [P] API contract test GET /metrics in test/contract/metrics_get_test.go
-- [ ] T011 [P] Controller integration test using envtest in test/integration/controller_test.go
-- [ ] T012 [P] Integration test operator deployment in test/integration/operator_deployment_test.go
-- [ ] T013 [P] Integration test bootstrap operation in test/integration/bootstrap_test.go
-- [ ] T014a [P] Integration test reconciliation operation in test/integration/reconciliation_test.go
-- [ ] T014b [P] Integration test JIRA API connectivity in test/integration/jira_integration_test.go
-- [ ] T014c [P] Integration test git operations in test/integration/git_integration_test.go
-- [ ] T014d [P] Integration test agent submodule access in test/integration/agent_integration_test.go
+- [x] T006 [P] CRD validation test for JiraCDC schema in test/crd/jiracdc_validation_test.go
+- [x] T007 [P] API contract test GET /projects in test/contract/projects_get_test.go
+- [x] T008 [P] API contract test POST /projects/{key}/sync in test/contract/sync_post_test.go
+- [x] T009 [P] API contract test GET /tasks in test/contract/tasks_get_test.go
+- [x] T010 [P] API contract test GET /tasks/{id} in test/contract/tasks_detail_get_test.go
+- [x] T010a [P] API contract test POST /tasks/{id}/cancel in test/contract/tasks_cancel_post_test.go
+- [x] T010b [P] API contract test GET /issues/{key} in test/contract/issues_get_test.go
+- [x] T010c [P] API contract test GET /health in test/contract/health_get_test.go
+- [x] T010d [P] API contract test GET /metrics in test/contract/metrics_get_test.go
+- [x] T011 [P] Controller integration test using envtest in test/integration/controller_test.go
+- [x] T012 [P] Integration test operator deployment in test/integration/operator_deployment_test.go
+- [x] T013 [P] Integration test bootstrap operation in test/integration/bootstrap_test.go
+- [x] T014a [P] Integration test reconciliation operation in test/integration/reconciliation_test.go
+- [x] T014b [P] Integration test JIRA API connectivity in test/integration/jira_integration_test.go
+- [x] T014c [P] Integration test git operations in test/integration/git_integration_test.go
+- [x] T014d [P] Integration test agent submodule access in test/integration/agent_integration_test.go
 
 ## Phase 3.3: Core Implementation (ONLY after tests are failing)
 ### Operator Core
-- [ ] T015 [P] JiraCDC CRD types in api/v1/jiracdc_types.go
-- [ ] T016 [P] JiraCDC controller reconcile logic in controllers/jiracdc_controller.go
-- [ ] T017 [P] Operand manager interface in internal/operands/manager.go
-- [ ] T018 [P] API operand deployment manager in internal/operands/api_manager.go
-- [ ] T019 [P] UI operand deployment manager in internal/operands/ui_manager.go
-- [ ] T020 [P] SyncJob manager for bootstrap/reconciliation in internal/operands/job_manager.go
+- [x] T015 [P] JiraCDC CRD types in api/v1/jiracdc_types.go
+- [x] T016 [P] JiraCDC controller reconcile logic in controllers/jiracdc_controller.go
+- [x] T017 [P] Operand manager interface in internal/operands/manager.go
+- [x] T018 [P] API operand deployment manager in internal/operands/api_manager.go
+- [x] T019 [P] UI operand deployment manager in internal/operands/ui_manager.go
+- [x] T020 [P] SyncJob manager for bootstrap/reconciliation in internal/operands/job_manager.go
 
 ### Sync Engine Core
-- [ ] T021 [P] JIRA client with rate limiting in internal/jira/client.go
-- [ ] T022 [P] Git operations manager in internal/git/operations.go
-- [ ] T023 [P] Issue synchronization engine in internal/sync/engine.go
-- [ ] T024 [P] Task progress tracking in internal/sync/progress.go
-- [ ] T025 CDCTask state machine in internal/sync/task.go
-- [ ] T026 SyncOperation processor in internal/sync/operation.go
+- [x] T021 [P] JIRA client with rate limiting in internal/jira/client.go
+- [x] T022 [P] Git operations manager in internal/git/operations.go
+- [x] T023 [P] Issue synchronization engine in internal/sync/engine.go
+- [x] T024 [P] Task progress tracking in internal/sync/progress.go
+- [x] T025 CDCTask state machine in internal/sync/task.go
+- [x] T026 SyncOperation processor in internal/sync/operation.go
 
 ### API Operand
-- [ ] T027 [P] Project status handler in operands/api/handlers/projects.go
-- [ ] T028 [P] Task management handler in operands/api/handlers/tasks.go
-- [ ] T029 [P] Issue status handler in operands/api/handlers/issues.go
-- [ ] T030 [P] Health check handler in operands/api/handlers/health.go
-- [ ] T031 [P] Metrics endpoint handler in operands/api/handlers/metrics.go
-- [ ] T032 API server router and middleware in operands/api/router/router.go
-- [ ] T033 API server main in operands/api/main.go
+- [x] T027 [P] Project status handler in operands/api/handlers/projects.go
+- [x] T028 [P] Task management handler in operands/api/handlers/tasks.go
+- [x] T029 [P] Issue status handler in operands/api/handlers/issues.go
+- [x] T030 [P] Health check handler in operands/api/handlers/health.go
+- [x] T031 [P] Metrics endpoint handler in operands/api/handlers/metrics.go
+- [x] T032 API server router and middleware in operands/api/router/router.go
+- [x] T033 API server main in operands/api/main.go
 
 ### UI Operand
 - [ ] T034 [P] React project setup with Patternfly 6 in operands/ui/package.json

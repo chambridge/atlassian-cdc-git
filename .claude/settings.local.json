@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(.specify/scripts/bash/create-new-feature.sh:*)",
+      "Bash(.specify/scripts/bash/setup-plan.sh:*)",
+      "Bash(.specify/scripts/bash/check-task-prerequisites.sh:*)",
+      "Bash(.specify/scripts/bash/check-implementation-prerequisites.sh:*)",
+      "Bash(kubebuilder:*)",
+      "Bash(go mod:*)",
+      "Bash(controller-gen:*)",
+      "Bash(go install:*)",
+      "Bash($HOME/go/bin/controller-gen object:headerFile=\"hack/boilerplate.go.txt\" paths=\"./api/...\")",
+      "Bash(go get:*)",
+      "Bash(go build:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
