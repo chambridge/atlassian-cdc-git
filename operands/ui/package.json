@@ -1,0 +1,67 @@
+{
+  "name": "jiracdc-ui",
+  "version": "1.0.0",
+  "description": "JIRA CDC Operator Web UI",
+  "private": true,
+  "homepage": "/",
+  "dependencies": {
+    "@patternfly/react-core": "^6.2.0",
+    "@patternfly/react-icons": "^6.2.0",
+    "@patternfly/react-table": "^6.2.0",
+    "@patternfly/react-charts": "^8.2.0",
+    "@types/node": "^20.0.0",
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0",
+    "react-router-dom": "^6.8.0",
+    "axios": "^1.6.0",
+    "typescript": "^5.0.0",
+    "web-vitals": "^3.5.0"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^6.1.0",
+    "@testing-library/react": "^14.1.0",
+    "@testing-library/user-event": "^14.5.0",
+    "@types/jest": "^29.5.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "eslint": "^8.45.0",
+    "eslint-plugin-react": "^7.33.0",
+    "eslint-plugin-react-hooks": "^4.6.0",
+    "react-scripts": "^5.0.1"
+  },
+  "scripts": {
+    "start": "react-scripts start",
+    "build": "react-scripts build",
+    "test": "react-scripts test",
+    "eject": "react-scripts eject",
+    "lint": "eslint src --ext .ts,.tsx",
+    "lint:fix": "eslint src --ext .ts,.tsx --fix",
+    "type-check": "tsc --noEmit",
+    "preview": "serve -s build -p 3000"
+  },
+  "eslintConfig": {
+    "extends": [
+      "react-app",
+      "react-app/jest"
+    ],
+    "rules": {
+      "@typescript-eslint/no-unused-vars": "error",
+      "react-hooks/exhaustive-deps": "warn"
+    }
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  },
+  "proxy": "http://localhost:8080"
+}
