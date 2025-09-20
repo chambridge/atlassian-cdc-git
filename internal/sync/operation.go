@@ -21,495 +21,519 @@ import (
 	"fmt"
 	"time"
 
+	jiradcv1 "github.com/atlassian/jira-cdc/api/v1"
 	"github.com/google/uuid"
-	"github.com/company/jira-cdc-operator/internal/git"
-	"github.com/company/jira-cdc-operator/internal/jira"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
-// OperationType represents the type of sync operation
+// OperationType defines the type of sync operation
 type OperationType string
 
 const (
-	OperationTypeCreate OperationType = "create"
-	OperationTypeUpdate OperationType = "update"
-	OperationTypeDelete OperationType = "delete"
-	OperationTypeMove   OperationType = "move"
-)
-
-// OperationStatus represents the status of a sync operation
-type OperationStatus string
-
-const (
-	OperationStatusPending    OperationStatus = "pending"
-	OperationStatusProcessing OperationStatus = "processing"
-	OperationStatusCompleted  OperationStatus = "completed"
-	OperationStatusFailed     OperationStatus = "failed"
-	OperationStatusSkipped    OperationStatus = "skipped"
+	OperationBootstrap   OperationType = "bootstrap"
+	OperationReconcile   OperationType = "reconcile"
+	OperationForcedSync  OperationType = "forced-sync"
+	OperationCleanup     OperationType = "cleanup"
 )
 
 // SyncOperation represents a single synchronization operation
 type SyncOperation struct {
-	ID            string
-	TaskID        string
-	IssueKey      string
-	Type          OperationType
-	Status        OperationStatus
-	JiraData      *jira.Issue
-	GitData       *git.IssueData
-	ErrorDetails  string
-	ProcessedAt   *time.Time
-	RetryCount    int
-	MaxRetries    int
-	Priority      int
-	Dependencies  []string
-	Metadata      map[string]interface{}
+	ID             string                    `json:"id"`
+	Type           OperationType             `json:"type"`
+	Status         CDCTaskStatus             `json:"status"`
+	Progress       ProgressTracker           `json:"progress"`
+	Config         *SyncConfig               `json:"config"`
+	Tasks          []CDCTask                 `json:"tasks"`
+	StartTime      *metav1.Time              `json:"startTime,omitempty"`
+	EndTime        *metav1.Time              `json:"endTime,omitempty"`
+	ErrorMessage   string                    `json:"errorMessage,omitempty"`
+	ResultSummary  *OperationResultSummary   `json:"resultSummary,omitempty"`
 }
 
-// OperationResult represents the result of processing a sync operation
-type OperationResult struct {
-	Success        bool
-	Operation      *SyncOperation
-	CommitRequired bool
-	CommitHash     string
-	ErrorMessage   string
-	FilesModified  []string
-	BytesProcessed int64
+// OperationResultSummary contains summary information about completed operations
+type OperationResultSummary struct {
+	TotalTasks       int `json:"totalTasks"`
+	CompletedTasks   int `json:"completedTasks"`
+	FailedTasks      int `json:"failedTasks"`
+	SkippedTasks     int `json:"skippedTasks"`
+	ProcessedIssues  int `json:"processedIssues"`
+	CreatedFiles     int `json:"createdFiles"`
+	UpdatedFiles     int `json:"updatedFiles"`
+	DeletedFiles     int `json:"deletedFiles"`
+	GitCommits       int `json:"gitCommits"`
+	ElapsedTime      time.Duration `json:"elapsedTime"`
 }
 
-// BatchOperationResult represents the result of processing a batch of operations
-type BatchOperationResult struct {
-	TotalOperations    int
-	SuccessfulOps      int
-	FailedOps          int
-	SkippedOps         int
-	Operations         []*OperationResult
-	BatchCommitHash    string
-	TotalFilesModified int
-	TotalBytesProcessed int64
-	ProcessingDuration time.Duration
+// SyncOperationProcessor handles the execution of sync operations
+type SyncOperationProcessor interface {
+	// StartOperation creates and starts a new sync operation
+	StartOperation(ctx context.Context, operationType OperationType, config *SyncConfig) (*SyncOperation, error)
+	
+	// GetOperation retrieves an operation by ID
+	GetOperation(ctx context.Context, operationID string) (*SyncOperation, error)
+	
+	// ListOperations returns all operations, optionally filtered by status
+	ListOperations(ctx context.Context, statusFilter *CDCTaskStatus) ([]*SyncOperation, error)
+	
+	// CancelOperation cancels a running operation
+	CancelOperation(ctx context.Context, operationID string) error
+	
+	// WaitForCompletion waits for an operation to complete
+	WaitForCompletion(ctx context.Context, operationID string, timeout time.Duration) (*SyncOperation, error)
+	
+	// CleanupOldOperations removes old completed operations
+	CleanupOldOperations(ctx context.Context, retentionDays int) error
 }
 
-// OperationProcessor processes sync operations
-type OperationProcessor interface {
-	// ProcessOperation processes a single sync operation
-	ProcessOperation(ctx context.Context, operation *SyncOperation) (*OperationResult, error)
-
-	// ProcessBatch processes a batch of sync operations
-	ProcessBatch(ctx context.Context, operations []*SyncOperation) (*BatchOperationResult, error)
-
-	// ValidateOperation validates a sync operation before processing
-	ValidateOperation(ctx context.Context, operation *SyncOperation) error
-
-	// CreateOperation creates a sync operation from JIRA issue data
-	CreateOperation(ctx context.Context, taskID string, issue *jira.Issue, opType OperationType) (*SyncOperation, error)
-
-	// RetryOperation retries a failed operation
-	RetryOperation(ctx context.Context, operation *SyncOperation) (*OperationResult, error)
-
-	// GetOperationMetrics returns metrics for operations
-	GetOperationMetrics(ctx context.Context) (*OperationMetrics, error)
+// operationProcessor implements SyncOperationProcessor
+type operationProcessor struct {
+	engine     *Engine
+	operations map[string]*SyncOperation
+	callbacks  map[string][]ProgressCallback
 }
 
-// OperationMetrics represents operation processing metrics
-type OperationMetrics struct {
-	TotalOperations      int64
-	SuccessfulOperations int64
-	FailedOperations     int64
-	SkippedOperations    int64
-	AverageProcessingTime time.Duration
-	TotalBytesProcessed  int64
-	OperationsPerSecond  float64
-}
-
-// OperationProcessorImpl is the concrete implementation of OperationProcessor
-type OperationProcessorImpl struct {
-	jiraClient      *jira.Client
-	gitManager      *git.Manager
-	taskManager     TaskManager
-	progressTracker ProgressTracker
-	config          OperationConfig
-	metrics         *OperationMetrics
-}
-
-// OperationConfig represents configuration for operation processing
-type OperationConfig struct {
-	MaxRetries          int
-	RetryDelay          time.Duration
-	BatchSize           int
-	ConcurrentOps       int
-	TimeoutPerOperation time.Duration
-	CommitBatches       bool
-	ValidateBeforeCommit bool
-}
-
-// NewOperationProcessor creates a new operation processor
-func NewOperationProcessor(
-	jiraClient *jira.Client,
-	gitManager *git.Manager,
-	taskManager TaskManager,
-	progressTracker ProgressTracker,
-	config OperationConfig,
-) OperationProcessor {
-	return &OperationProcessorImpl{
-		jiraClient:      jiraClient,
-		gitManager:      gitManager,
-		taskManager:     taskManager,
-		progressTracker: progressTracker,
-		config:          config,
-		metrics: &OperationMetrics{
-			TotalOperations:      0,
-			SuccessfulOperations: 0,
-			FailedOperations:     0,
-			SkippedOperations:    0,
-		},
+// NewSyncOperationProcessor creates a new operation processor
+func NewSyncOperationProcessor(engine *Engine) SyncOperationProcessor {
+	return &operationProcessor{
+		engine:     engine,
+		operations: make(map[string]*SyncOperation),
+		callbacks:  make(map[string][]ProgressCallback),
 	}
 }
 
-// ProcessOperation processes a single sync operation
-func (op *OperationProcessorImpl) ProcessOperation(ctx context.Context, operation *SyncOperation) (*OperationResult, error) {
-	startTime := time.Now()
-	operation.Status = OperationStatusProcessing
-
-	// Update metrics
-	op.metrics.TotalOperations++
-
-	// Validate operation
-	if err := op.ValidateOperation(ctx, operation); err != nil {
-		return op.handleOperationError(operation, fmt.Errorf("validation failed: %w", err))
-	}
-
-	// Process based on operation type
-	result, err := op.processOperationByType(ctx, operation)
-	if err != nil {
-		return op.handleOperationError(operation, err)
-	}
-
-	// Update operation status
-	operation.Status = OperationStatusCompleted
-	operation.ProcessedAt = &startTime
-	result.Success = true
-
-	// Update metrics
-	op.metrics.SuccessfulOperations++
-	processingTime := time.Since(startTime)
-	op.updateAverageProcessingTime(processingTime)
-
-	return result, nil
-}
-
-// ProcessBatch processes a batch of sync operations
-func (op *OperationProcessorImpl) ProcessBatch(ctx context.Context, operations []*SyncOperation) (*BatchOperationResult, error) {
-	startTime := time.Now()
-	result := &BatchOperationResult{
-		TotalOperations: len(operations),
-		Operations:      make([]*OperationResult, 0, len(operations)),
-	}
-
-	// Process operations
-	for _, operation := range operations {
-		opResult, err := op.ProcessOperation(ctx, operation)
-		if err != nil {
-			result.FailedOps++
-			opResult = &OperationResult{
-				Success:      false,
-				Operation:    operation,
-				ErrorMessage: err.Error(),
-			}
-		} else if operation.Status == OperationStatusSkipped {
-			result.SkippedOps++
-		} else {
-			result.SuccessfulOps++
-		}
-
-		result.Operations = append(result.Operations, opResult)
-		result.TotalFilesModified += len(opResult.FilesModified)
-		result.TotalBytesProcessed += opResult.BytesProcessed
-
-		// Check for cancellation
-		select {
-		case <-ctx.Done():
-			return result, ctx.Err()
-		default:
-		}
-	}
-
-	// Commit batch if configured
-	if op.config.CommitBatches && result.SuccessfulOps > 0 {
-		commitHash, err := op.commitBatch(ctx, operations, result)
-		if err != nil {
-			return result, fmt.Errorf("failed to commit batch: %w", err)
-		}
-		result.BatchCommitHash = commitHash
-	}
-
-	result.ProcessingDuration = time.Since(startTime)
-	return result, nil
-}
-
-// ValidateOperation validates a sync operation before processing
-func (op *OperationProcessorImpl) ValidateOperation(ctx context.Context, operation *SyncOperation) error {
-	if operation == nil {
-		return fmt.Errorf("operation is nil")
-	}
-
-	if operation.IssueKey == "" {
-		return fmt.Errorf("issue key is required")
-	}
-
-	if operation.Type == "" {
-		return fmt.Errorf("operation type is required")
-	}
-
-	if operation.JiraData == nil && operation.Type != OperationTypeDelete {
-		return fmt.Errorf("JIRA data is required for %s operations", operation.Type)
-	}
-
-	// Validate dependencies
-	for _, depID := range operation.Dependencies {
-		// Check if dependency is satisfied
-		if !op.isDependencySatisfied(ctx, depID) {
-			return fmt.Errorf("dependency %s not satisfied", depID)
-		}
-	}
-
-	return nil
-}
-
-// CreateOperation creates a sync operation from JIRA issue data
-func (op *OperationProcessorImpl) CreateOperation(ctx context.Context, taskID string, issue *jira.Issue, opType OperationType) (*SyncOperation, error) {
+// StartOperation creates and starts a new sync operation
+func (p *operationProcessor) StartOperation(ctx context.Context, operationType OperationType, config *SyncConfig) (*SyncOperation, error) {
+	logger := log.FromContext(ctx)
+	
+	operationID := uuid.New().String()
+	logger.Info("Starting sync operation", "operationID", operationID, "type", operationType)
+	
+	// Create operation
 	operation := &SyncOperation{
-		ID:         uuid.New().String(),
-		TaskID:     taskID,
-		IssueKey:   issue.Key,
-		Type:       opType,
-		Status:     OperationStatusPending,
-		JiraData:   issue,
-		RetryCount: 0,
-		MaxRetries: op.config.MaxRetries,
-		Priority:   op.calculateOperationPriority(issue),
-		Metadata:   make(map[string]interface{}),
+		ID:        operationID,
+		Type:      operationType,
+		Status:    TaskStatusPending,
+		Config:    config,
+		Tasks:     []CDCTask{},
+		StartTime: &metav1.Time{Time: time.Now()},
 	}
-
-	// Convert JIRA data to git data
-	gitData, err := op.convertJiraToGitData(issue)
+	
+	// Initialize progress tracker
+	operation.Progress = NewProgressTracker()
+	
+	// Store operation
+	p.operations[operationID] = operation
+	
+	// Create tasks based on operation type
+	tasks, err := p.createTasksForOperation(ctx, operation)
 	if err != nil {
-		return nil, fmt.Errorf("failed to convert JIRA data: %w", err)
+		operation.Status = TaskStatusFailed
+		operation.ErrorMessage = fmt.Sprintf("Failed to create tasks: %v", err)
+		return operation, err
 	}
-	operation.GitData = gitData
-
+	
+	operation.Tasks = tasks
+	operation.Progress.SetTotalSteps(len(tasks))
+	
+	// Start operation execution in background
+	go p.executeOperation(ctx, operation)
+	
 	return operation, nil
 }
 
-// RetryOperation retries a failed operation
-func (op *OperationProcessorImpl) RetryOperation(ctx context.Context, operation *SyncOperation) (*OperationResult, error) {
-	if operation.RetryCount >= operation.MaxRetries {
-		return nil, fmt.Errorf("operation %s exceeded maximum retries (%d)", operation.ID, operation.MaxRetries)
+// GetOperation retrieves an operation by ID
+func (p *operationProcessor) GetOperation(ctx context.Context, operationID string) (*SyncOperation, error) {
+	operation, exists := p.operations[operationID]
+	if !exists {
+		return nil, fmt.Errorf("operation not found: %s", operationID)
 	}
-
-	// Increment retry count
-	operation.RetryCount++
-	operation.Status = OperationStatusPending
-	operation.ErrorDetails = ""
-
-	// Add retry delay
-	time.Sleep(op.config.RetryDelay * time.Duration(operation.RetryCount))
-
-	return op.ProcessOperation(ctx, operation)
+	return operation, nil
 }
 
-// GetOperationMetrics returns metrics for operations
-func (op *OperationProcessorImpl) GetOperationMetrics(ctx context.Context) (*OperationMetrics, error) {
-	// Calculate operations per second
-	if op.metrics.AverageProcessingTime > 0 {
-		op.metrics.OperationsPerSecond = 1.0 / op.metrics.AverageProcessingTime.Seconds()
-	}
-
-	// Return a copy to avoid race conditions
-	return &OperationMetrics{
-		TotalOperations:       op.metrics.TotalOperations,
-		SuccessfulOperations:  op.metrics.SuccessfulOperations,
-		FailedOperations:      op.metrics.FailedOperations,
-		SkippedOperations:     op.metrics.SkippedOperations,
-		AverageProcessingTime: op.metrics.AverageProcessingTime,
-		TotalBytesProcessed:   op.metrics.TotalBytesProcessed,
-		OperationsPerSecond:   op.metrics.OperationsPerSecond,
-	}, nil
-}
-
-// processOperationByType processes operation based on its type
-func (op *OperationProcessorImpl) processOperationByType(ctx context.Context, operation *SyncOperation) (*OperationResult, error) {
-	result := &OperationResult{
-		Operation: operation,
-	}
-
-	switch operation.Type {
-	case OperationTypeCreate, OperationTypeUpdate:
-		return op.processCreateOrUpdate(ctx, operation)
-	case OperationTypeDelete:
-		return op.processDelete(ctx, operation)
-	case OperationTypeMove:
-		return op.processMove(ctx, operation)
-	default:
-		return nil, fmt.Errorf("unsupported operation type: %s", operation.Type)
-	}
-}
-
-// processCreateOrUpdate processes create or update operations
-func (op *OperationProcessorImpl) processCreateOrUpdate(ctx context.Context, operation *SyncOperation) (*OperationResult, error) {
-	// Create or update issue file
-	err := op.gitManager.CreateIssueFile(ctx, *operation.GitData)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create/update issue file: %w", err)
-	}
-
-	result := &OperationResult{
-		Operation:       operation,
-		CommitRequired:  true,
-		FilesModified:   []string{fmt.Sprintf("%s.md", operation.IssueKey)},
-		BytesProcessed:  int64(len(operation.JiraData.Fields.Description)),
-	}
-
-	return result, nil
-}
-
-// processDelete processes delete operations
-func (op *OperationProcessorImpl) processDelete(ctx context.Context, operation *SyncOperation) (*OperationResult, error) {
-	// For now, we don't actually delete files but mark them as deleted
-	// This could be enhanced to move files to a deleted directory
-	operation.Status = OperationStatusSkipped
-	op.metrics.SkippedOperations++
-
-	result := &OperationResult{
-		Operation:      operation,
-		CommitRequired: false,
-	}
-
-	return result, nil
-}
-
-// processMove processes move operations
-func (op *OperationProcessorImpl) processMove(ctx context.Context, operation *SyncOperation) (*OperationResult, error) {
-	// For now, move operations are treated as updates
-	return op.processCreateOrUpdate(ctx, operation)
-}
-
-// handleOperationError handles operation errors
-func (op *OperationProcessorImpl) handleOperationError(operation *SyncOperation, err error) (*OperationResult, error) {
-	operation.Status = OperationStatusFailed
-	operation.ErrorDetails = err.Error()
-	op.metrics.FailedOperations++
-
-	result := &OperationResult{
-		Success:      false,
-		Operation:    operation,
-		ErrorMessage: err.Error(),
-	}
-
-	return result, err
-}
-
-// commitBatch commits a batch of operations
-func (op *OperationProcessorImpl) commitBatch(ctx context.Context, operations []*SyncOperation, result *BatchOperationResult) (string, error) {
-	if result.SuccessfulOps == 0 {
-		return "", nil
-	}
-
-	commitInfo := git.CommitInfo{
-		Message: fmt.Sprintf("feat: sync batch of %d operations", result.SuccessfulOps),
-		Author: git.AuthorInfo{
-			Name:  "JIRA CDC Operator",
-			Email: "jiracdc@example.com",
-		},
-	}
-
-	return op.gitManager.CommitChanges(ctx, commitInfo)
-}
-
-// convertJiraToGitData converts JIRA issue data to git issue data
-func (op *OperationProcessorImpl) convertJiraToGitData(issue *jira.Issue) (*git.IssueData, error) {
-	gitData := &git.IssueData{
-		Key:         issue.Key,
-		Summary:     issue.Fields.Summary,
-		Description: issue.Fields.Description,
-		Status:      issue.Fields.Status.Name,
-		Priority:    issue.Fields.Priority.Name,
-		Labels:      issue.Fields.Labels,
-		Created:     parseJiraTime(issue.Fields.Created),
-		Updated:     parseJiraTime(issue.Fields.Updated),
-	}
-
-	// Set assignee and reporter
-	if issue.Fields.Assignee != nil {
-		gitData.Assignee = issue.Fields.Assignee.DisplayName
-	}
-	if issue.Fields.Reporter != nil {
-		gitData.Reporter = issue.Fields.Reporter.DisplayName
-	}
-
-	// Set components
-	for _, component := range issue.Fields.Components {
-		gitData.Components = append(gitData.Components, component.Name)
-	}
-
-	return gitData, nil
-}
-
-// calculateOperationPriority calculates operation priority based on issue data
-func (op *OperationProcessorImpl) calculateOperationPriority(issue *jira.Issue) int {
-	priority := 0
-
-	// Base priority on JIRA priority
-	switch issue.Fields.Priority.Name {
-	case "Highest":
-		priority += 100
-	case "High":
-		priority += 75
-	case "Medium":
-		priority += 50
-	case "Low":
-		priority += 25
-	case "Lowest":
-		priority += 10
-	}
-
-	// Boost priority for recently updated issues
-	if issue.Fields.Updated != "" {
-		updated := parseJiraTime(issue.Fields.Updated)
-		hoursSinceUpdate := time.Since(updated).Hours()
-		if hoursSinceUpdate < 24 {
-			priority += 20
-		} else if hoursSinceUpdate < 168 { // 1 week
-			priority += 10
+// ListOperations returns all operations, optionally filtered by status
+func (p *operationProcessor) ListOperations(ctx context.Context, statusFilter *CDCTaskStatus) ([]*SyncOperation, error) {
+	var operations []*SyncOperation
+	
+	for _, operation := range p.operations {
+		if statusFilter == nil || operation.Status == *statusFilter {
+			operations = append(operations, operation)
 		}
 	}
-
-	return priority
+	
+	return operations, nil
 }
 
-// isDependencySatisfied checks if a dependency is satisfied
-func (op *OperationProcessorImpl) isDependencySatisfied(ctx context.Context, depID string) bool {
-	// For now, assume all dependencies are satisfied
-	// This could be enhanced to check actual dependency status
-	return true
+// CancelOperation cancels a running operation
+func (p *operationProcessor) CancelOperation(ctx context.Context, operationID string) error {
+	operation, exists := p.operations[operationID]
+	if !exists {
+		return fmt.Errorf("operation not found: %s", operationID)
+	}
+	
+	if operation.Status != TaskStatusRunning {
+		return fmt.Errorf("operation %s is not running (status: %s)", operationID, operation.Status)
+	}
+	
+	// Cancel all running tasks
+	for i := range operation.Tasks {
+		if operation.Tasks[i].Status == TaskStatusRunning {
+			if err := operation.Tasks[i].Cancel(); err != nil {
+				log.FromContext(ctx).Error(err, "Failed to cancel task", "taskID", operation.Tasks[i].ID)
+			}
+		}
+	}
+	
+	operation.Status = TaskStatusCancelled
+	operation.EndTime = &metav1.Time{Time: time.Now()}
+	
+	return nil
 }
 
-// updateAverageProcessingTime updates the average processing time metric
-func (op *OperationProcessorImpl) updateAverageProcessingTime(processingTime time.Duration) {
-	if op.metrics.AverageProcessingTime == 0 {
-		op.metrics.AverageProcessingTime = processingTime
-	} else {
-		// Simple moving average
-		op.metrics.AverageProcessingTime = (op.metrics.AverageProcessingTime + processingTime) / 2
+// WaitForCompletion waits for an operation to complete
+func (p *operationProcessor) WaitForCompletion(ctx context.Context, operationID string, timeout time.Duration) (*SyncOperation, error) {
+	operation, exists := p.operations[operationID]
+	if !exists {
+		return nil, fmt.Errorf("operation not found: %s", operationID)
+	}
+	
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+	
+	for {
+		select {
+		case <-ctx.Done():
+			return operation, ctx.Err()
+		case <-ticker.C:
+			if operation.Status == TaskStatusCompleted || 
+			   operation.Status == TaskStatusFailed || 
+			   operation.Status == TaskStatusCancelled {
+				return operation, nil
+			}
+		}
 	}
 }
 
-// parseJiraTime parses JIRA timestamp format
-func parseJiraTime(jiraTime string) time.Time {
-	// JIRA uses ISO 8601 format: 2006-01-02T15:04:05.000-0700
-	t, err := time.Parse("2006-01-02T15:04:05.000-0700", jiraTime)
+// CleanupOldOperations removes old completed operations
+func (p *operationProcessor) CleanupOldOperations(ctx context.Context, retentionDays int) error {
+	logger := log.FromContext(ctx)
+	cutoff := time.Now().AddDate(0, 0, -retentionDays)
+	
+	var toDelete []string
+	for operationID, operation := range p.operations {
+		if operation.EndTime != nil && operation.EndTime.Time.Before(cutoff) {
+			toDelete = append(toDelete, operationID)
+		}
+	}
+	
+	for _, operationID := range toDelete {
+		delete(p.operations, operationID)
+		delete(p.callbacks, operationID)
+		logger.Info("Cleaned up old operation", "operationID", operationID)
+	}
+	
+	return nil
+}
+
+// createTasksForOperation creates tasks based on operation type
+func (p *operationProcessor) createTasksForOperation(ctx context.Context, operation *SyncOperation) ([]CDCTask, error) {
+	var tasks []CDCTask
+	
+	switch operation.Type {
+	case OperationBootstrap:
+		tasks = p.createBootstrapTasks(ctx, operation.Config)
+	case OperationReconcile:
+		tasks = p.createReconcileTasks(ctx, operation.Config)
+	case OperationForcedSync:
+		tasks = p.createForcedSyncTasks(ctx, operation.Config)
+	case OperationCleanup:
+		tasks = p.createCleanupTasks(ctx, operation.Config)
+	default:
+		return nil, fmt.Errorf("unknown operation type: %s", operation.Type)
+	}
+	
+	return tasks, nil
+}
+
+// createBootstrapTasks creates tasks for bootstrap operation
+func (p *operationProcessor) createBootstrapTasks(ctx context.Context, config *SyncConfig) []CDCTask {
+	var tasks []CDCTask
+	
+	// Task 1: Initialize git repository
+	tasks = append(tasks, CDCTask{
+		ID:          uuid.New().String(),
+		Name:        "Initialize Git Repository",
+		Description: "Clone or initialize the target git repository",
+		Type:        TaskTypeGitOperation,
+		Status:      TaskStatusPending,
+		Priority:    TaskPriorityHigh,
+		Dependencies: []string{},
+		Metadata: map[string]interface{}{
+			"repository_url": config.GitRepository.URL,
+			"branch":        config.GitRepository.Branch,
+		},
+	})
+	
+	// Task 2: Fetch JIRA projects
+	tasks = append(tasks, CDCTask{
+		ID:          uuid.New().String(),
+		Name:        "Fetch JIRA Projects",
+		Description: "Retrieve project information from JIRA",
+		Type:        TaskTypeJiraOperation,
+		Status:      TaskStatusPending,
+		Priority:    TaskPriorityHigh,
+		Dependencies: []string{},
+		Metadata: map[string]interface{}{
+			"jira_url":     config.JiraInstance.BaseURL,
+			"project_keys": config.SyncTarget.ProjectKeys,
+		},
+	})
+	
+	// Task 3: Sync issues (depends on both git and JIRA tasks)
+	tasks = append(tasks, CDCTask{
+		ID:          uuid.New().String(),
+		Name:        "Bootstrap Issue Sync",
+		Description: "Perform initial sync of all JIRA issues to git",
+		Type:        TaskTypeSyncOperation,
+		Status:      TaskStatusPending,
+		Priority:    TaskPriorityMedium,
+		Dependencies: []string{tasks[0].ID, tasks[1].ID},
+		Metadata: map[string]interface{}{
+			"sync_type": "bootstrap",
+			"batch_size": config.SyncTarget.BatchSize,
+		},
+	})
+	
+	return tasks
+}
+
+// createReconcileTasks creates tasks for reconcile operation
+func (p *operationProcessor) createReconcileTasks(ctx context.Context, config *SyncConfig) []CDCTask {
+	var tasks []CDCTask
+	
+	// Task 1: Check for JIRA updates
+	tasks = append(tasks, CDCTask{
+		ID:          uuid.New().String(),
+		Name:        "Check JIRA Updates",
+		Description: "Query JIRA for issues updated since last sync",
+		Type:        TaskTypeJiraOperation,
+		Status:      TaskStatusPending,
+		Priority:    TaskPriorityHigh,
+		Dependencies: []string{},
+		Metadata: map[string]interface{}{
+			"last_sync_time": config.LastSyncTime,
+			"project_keys":   config.SyncTarget.ProjectKeys,
+		},
+	})
+	
+	// Task 2: Update git repository
+	tasks = append(tasks, CDCTask{
+		ID:          uuid.New().String(),
+		Name:        "Update Git Repository",
+		Description: "Pull latest changes from git repository",
+		Type:        TaskTypeGitOperation,
+		Status:      TaskStatusPending,
+		Priority:    TaskPriorityHigh,
+		Dependencies: []string{},
+		Metadata: map[string]interface{}{
+			"repository_url": config.GitRepository.URL,
+			"branch":        config.GitRepository.Branch,
+		},
+	})
+	
+	// Task 3: Sync updated issues
+	tasks = append(tasks, CDCTask{
+		ID:          uuid.New().String(),
+		Name:        "Sync Updated Issues",
+		Description: "Sync updated JIRA issues to git",
+		Type:        TaskTypeSyncOperation,
+		Status:      TaskStatusPending,
+		Priority:    TaskPriorityMedium,
+		Dependencies: []string{tasks[0].ID, tasks[1].ID},
+		Metadata: map[string]interface{}{
+			"sync_type":  "incremental",
+			"batch_size": config.SyncTarget.BatchSize,
+		},
+	})
+	
+	return tasks
+}
+
+// createForcedSyncTasks creates tasks for forced sync operation
+func (p *operationProcessor) createForcedSyncTasks(ctx context.Context, config *SyncConfig) []CDCTask {
+	// For forced sync, use bootstrap tasks but with different metadata
+	tasks := p.createBootstrapTasks(ctx, config)
+	
+	// Update metadata to indicate forced sync
+	for i := range tasks {
+		if tasks[i].Type == TaskTypeSyncOperation {
+			tasks[i].Name = "Forced Issue Sync"
+			tasks[i].Description = "Force sync all JIRA issues to git, overwriting existing files"
+			tasks[i].Metadata["sync_type"] = "forced"
+			tasks[i].Metadata["overwrite"] = true
+		}
+	}
+	
+	return tasks
+}
+
+// createCleanupTasks creates tasks for cleanup operation
+func (p *operationProcessor) createCleanupTasks(ctx context.Context, config *SyncConfig) []CDCTask {
+	var tasks []CDCTask
+	
+	// Task 1: Identify orphaned files
+	tasks = append(tasks, CDCTask{
+		ID:          uuid.New().String(),
+		Name:        "Identify Orphaned Files",
+		Description: "Find git files that no longer have corresponding JIRA issues",
+		Type:        TaskTypeSyncOperation,
+		Status:      TaskStatusPending,
+		Priority:    TaskPriorityMedium,
+		Dependencies: []string{},
+		Metadata: map[string]interface{}{
+			"operation_type": "cleanup_identification",
+			"project_keys":   config.SyncTarget.ProjectKeys,
+		},
+	})
+	
+	// Task 2: Remove orphaned files
+	tasks = append(tasks, CDCTask{
+		ID:          uuid.New().String(),
+		Name:        "Remove Orphaned Files",
+		Description: "Delete git files for issues that no longer exist in JIRA",
+		Type:        TaskTypeGitOperation,
+		Status:      TaskStatusPending,
+		Priority:    TaskPriorityLow,
+		Dependencies: []string{tasks[0].ID},
+		Metadata: map[string]interface{}{
+			"operation_type": "cleanup_removal",
+		},
+	})
+	
+	return tasks
+}
+
+// executeOperation executes an operation by running its tasks
+func (p *operationProcessor) executeOperation(ctx context.Context, operation *SyncOperation) {
+	logger := log.FromContext(ctx).WithValues("operationID", operation.ID)
+	logger.Info("Executing sync operation")
+	
+	operation.Status = TaskStatusRunning
+	
+	// Execute tasks in dependency order
+	taskExecutor := NewTaskExecutor()
+	
+	// Setup progress callback
+	progressCallback := func(completedSteps int, message string) {
+		operation.Progress.Update(completedSteps, message)
+		
+		// Notify registered callbacks
+		if callbacks, exists := p.callbacks[operation.ID]; exists {
+			for _, callback := range callbacks {
+				callback(completedSteps, message)
+			}
+		}
+	}
+	
+	// Execute tasks
+	results, err := taskExecutor.ExecuteTasks(ctx, operation.Tasks, progressCallback)
 	if err != nil {
-		// Fallback to basic format
-		t, _ = time.Parse(time.RFC3339, jiraTime)
+		logger.Error(err, "Operation execution failed")
+		operation.Status = TaskStatusFailed
+		operation.ErrorMessage = err.Error()
+	} else {
+		operation.Status = TaskStatusCompleted
+		logger.Info("Operation completed successfully")
 	}
-	return t
+	
+	// Set end time and generate summary
+	operation.EndTime = &metav1.Time{Time: time.Now()}
+	operation.ResultSummary = p.generateResultSummary(operation, results)
+	
+	logger.Info("Operation finished", "status", operation.Status, "duration", operation.EndTime.Time.Sub(operation.StartTime.Time))
+}
+
+// generateResultSummary creates a summary of operation results
+func (p *operationProcessor) generateResultSummary(operation *SyncOperation, results []TaskResult) *OperationResultSummary {
+	summary := &OperationResultSummary{
+		TotalTasks: len(operation.Tasks),
+		ElapsedTime: operation.EndTime.Time.Sub(operation.StartTime.Time),
+	}
+	
+	for _, result := range results {
+		switch result.Status {
+		case TaskStatusCompleted:
+			summary.CompletedTasks++
+		case TaskStatusFailed:
+			summary.FailedTasks++
+		case TaskStatusCancelled:
+			summary.SkippedTasks++
+		}
+		
+		// Extract metrics from task metadata
+		if metrics, ok := result.Metadata["metrics"].(map[string]interface{}); ok {
+			if processed, ok := metrics["processed_issues"].(int); ok {
+				summary.ProcessedIssues += processed
+			}
+			if created, ok := metrics["created_files"].(int); ok {
+				summary.CreatedFiles += created
+			}
+			if updated, ok := metrics["updated_files"].(int); ok {
+				summary.UpdatedFiles += updated
+			}
+			if deleted, ok := metrics["deleted_files"].(int); ok {
+				summary.DeletedFiles += deleted
+			}
+			if commits, ok := metrics["git_commits"].(int); ok {
+				summary.GitCommits += commits
+			}
+		}
+	}
+	
+	return summary
+}
+
+// RegisterProgressCallback registers a callback for operation progress updates
+func (p *operationProcessor) RegisterProgressCallback(operationID string, callback ProgressCallback) {
+	if p.callbacks[operationID] == nil {
+		p.callbacks[operationID] = []ProgressCallback{}
+	}
+	p.callbacks[operationID] = append(p.callbacks[operationID], callback)
+}
+
+// ToJiraCDCOperation converts internal operation to API type
+func (op *SyncOperation) ToJiraCDCOperation() jiradcv1.CDCOperation {
+	return jiradcv1.CDCOperation{
+		ID:            op.ID,
+		Type:          string(op.Type),
+		Status:        string(op.Status),
+		StartTime:     op.StartTime,
+		EndTime:       op.EndTime,
+		ErrorMessage:  op.ErrorMessage,
+		TotalTasks:    len(op.Tasks),
+		CompletedTasks: func() int {
+			count := 0
+			for _, task := range op.Tasks {
+				if task.Status == TaskStatusCompleted {
+					count++
+				}
+			}
+			return count
+		}(),
+		Progress: func() int {
+			if len(op.Tasks) == 0 {
+				return 0
+			}
+			completed := 0
+			for _, task := range op.Tasks {
+				if task.Status == TaskStatusCompleted {
+					completed++
+				}
+			}
+			return (completed * 100) / len(op.Tasks)
+		}(),
+	}
 }

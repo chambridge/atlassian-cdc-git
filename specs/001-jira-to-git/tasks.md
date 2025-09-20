@@ -87,26 +87,26 @@
 - [x] T033 API server main in operands/api/main.go
 
 ### UI Operand
-- [ ] T034 [P] React project setup with Patternfly 6 in operands/ui/package.json
-- [ ] T035 [P] TypeScript configuration and build setup in operands/ui/tsconfig.json
-- [ ] T036 [P] Project dashboard component in operands/ui/src/components/ProjectDashboard.tsx
-- [ ] T037 [P] Task monitoring component in operands/ui/src/components/TaskMonitor.tsx
-- [ ] T038 [P] Health status component in operands/ui/src/components/HealthStatus.tsx
-- [ ] T039 [P] Issue browser component in operands/ui/src/components/IssueBrowser.tsx
-- [ ] T040 [P] API service client in operands/ui/src/services/api.ts
-- [ ] T041 [P] React Router setup and navigation in operands/ui/src/router/AppRouter.tsx
-- [ ] T042 Main App component in operands/ui/src/App.tsx
+- [x] T034 [P] React project setup with Patternfly 6 in operands/ui/package.json
+- [x] T035 [P] TypeScript configuration and build setup in operands/ui/tsconfig.json
+- [x] T036 [P] Project dashboard component in operands/ui/src/components/ProjectDashboard.tsx
+- [x] T037 [P] Task monitoring component in operands/ui/src/components/TaskMonitor.tsx
+- [x] T038 [P] Health status component in operands/ui/src/components/HealthStatus.tsx
+- [x] T039 [P] Issue browser component in operands/ui/src/components/IssueBrowser.tsx
+- [x] T040 [P] API service client in operands/ui/src/services/api.ts
+- [x] T041 [P] React Router setup and navigation in operands/ui/src/router/AppRouter.tsx
+- [x] T042 Main App component in operands/ui/src/App.tsx
 
 ## Phase 3.4: Integration
-- [ ] T043 JIRA authentication with secret mounting in internal/jira/auth.go
-- [ ] T044 Git credential management with SSH/HTTPS in internal/git/auth.go
-- [ ] T045 Kubernetes secret watchers for credential rotation in internal/k8s/secrets.go
-- [ ] T046 Prometheus metrics integration in internal/metrics/prometheus.go
-- [ ] T047 Structured logging with context in internal/logging/logger.go
-- [ ] T048 Rate limiting with exponential backoff in internal/jira/ratelimit.go
-- [ ] T049 Error handling and retry mechanisms in internal/errors/handler.go
-- [ ] T050 Kubernetes events publisher for operator status in internal/k8s/events.go
-- [ ] T051 Configuration validation and defaulting webhooks in internal/webhooks/validation.go
+- [x] T043 JIRA authentication with secret mounting in internal/jira/auth.go
+- [x] T044 Git credential management with SSH/HTTPS in internal/git/auth.go
+- [x] T045 Kubernetes secret watchers for credential rotation in internal/k8s/secrets.go
+- [x] T046 Prometheus metrics integration in internal/metrics/prometheus.go
+- [x] T047 Structured logging with context in internal/logging/logger.go
+- [x] T048 Rate limiting with exponential backoff in internal/jira/ratelimit.go
+- [x] T049 Error handling and retry mechanisms in internal/errors/handler.go
+- [x] T050 Kubernetes events publisher for operator status in internal/k8s/events.go
+- [x] T051 Configuration validation and defaulting webhooks in internal/webhooks/validation.go
 
 ## Phase 3.5: Polish
 - [ ] T052 [P] Unit tests for JIRA client in internal/jira/client_test.go
