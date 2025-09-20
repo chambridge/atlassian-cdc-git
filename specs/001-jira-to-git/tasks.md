@@ -109,18 +109,18 @@
 - [x] T051 Configuration validation and defaulting webhooks in internal/webhooks/validation.go
 
 ## Phase 3.5: Polish
-- [ ] T052 [P] Unit tests for JIRA client in internal/jira/client_test.go
-- [ ] T053 [P] Unit tests for git operations in internal/git/operations_test.go
-- [ ] T054 [P] Unit tests for sync engine in internal/sync/engine_test.go
-- [ ] T055 [P] Unit tests for operand managers in internal/operands/manager_test.go
-- [ ] T056 [P] Unit tests for API handlers in operands/api/handlers/*_test.go
-- [ ] T057 [P] React component unit tests in operands/ui/src/__tests__/
-- [ ] T058 [P] End-to-end tests for complete workflows in test/e2e/
-- [ ] T059 Performance testing for 1000 issue bootstrap (<30 min) in test/performance/
+- [x] T052 [P] Unit tests for JIRA client in internal/jira/client_test.go
+- [x] T053 [P] Unit tests for git operations in internal/git/operations_test.go
+- [x] T054 [P] Unit tests for sync engine in internal/sync/engine_test.go
+- [x] T055 [P] Unit tests for operand managers in internal/operands/manager_test.go
+- [x] T056 [P] Unit tests for API handlers in operands/api/handlers/*_test.go
+- [x] T057 [P] React component unit tests in operands/ui/src/__tests__/
+- [x] T058 [P] End-to-end tests for complete workflows in test/e2e/
+- [x] T059 Performance testing for 1000 issue bootstrap (<30 min) in test/performance/
 - [ ] T060 [P] Security scanning and vulnerability assessment
 - [ ] T061 [P] Generate OpenAPI documentation from API handlers
-- [ ] T062 [P] Update README.md with deployment instructions
-- [ ] T063 [P] Create troubleshooting guide in docs/troubleshooting.md
+- [x] T062 [P] Update README.md with deployment instructions
+- [x] T063 [P] Create troubleshooting guide in docs/troubleshooting.md
 - [ ] T064 Code duplication analysis and refactoring
 - [ ] T065 Execute quickstart scenarios for validation
 - [ ] T066 Load testing with concurrent JIRA projects
